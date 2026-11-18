@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bilbao Open-World GIS Prototype — CesiumJS + TypeScript</title>
+    <script type="module" crossorigin src="./main.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index.css">
+  </head>
+  <body>
+    <div id="cesiumContainer"></div>
+
+    <!-- HUD Principal -->
+    <div id="hud-overlay">
+      <!-- Panel Superior Izquierdo: Estado del Jugador, Modo y Controles -->
+      <div class="hud-panel" id="panel-status">
+        <div class="hud-header">
+          <span class="badge badge-live">PROTOTIPO GIS 3D</span>
+          <h1>GRAN BILBAO OPEN WORLD</h1>
+        </div>
+        <div class="status-grid">
+          <div><span class="label">Modo Cámara:</span> <strong id="hud-mode" class="highlight-cyan">JUGADOR (3ª Persona)</strong></div>
+          <div><span class="label">Zona Actual:</span> <strong id="hud-zone" class="highlight-green">Bilbao (Hub Central)</strong></div>
+          <div><span class="label">Coordenadas:</span> <code id="hud-coords">-2.9349°, 43.2630°</code></div>
+          <div><span class="label">Rumbo / Vel:</span> <code id="hud-velocity">0.0 m/s (N)</code></div>
+          <div><span class="label">Precarga Adyacente:</span> <strong id="hud-preload">Inactiva</strong></div>
+        </div>
+
+        <div class="mode-actions">
+          <button id="btn-toggle-spectator" class="btn-primary" title="Atajo: Tecla TAB">
+            🎥 Alternar Modo Espectador (TAB)
+          </button>
+          <button id="btn-toggle-fallback" class="btn-secondary" title="Mostrar/Ocultar geometría fallback OSM en zonas incompletas">
+            🏗️ Fallback OSM: ON
+          </button>
+        </div>
+
+        <!-- Selector rápido de cámara (Modo Espectador / Debug) -->
+        <div id="spectator-teleports" class="teleport-section">
+          <div class="section-title">Vista Aérea Rápida (Inspección de Municipios):</div>
+          <div class="teleport-buttons">
+            <button data-FlyTo="bilbao" class="btn-chip">1. Bilbao</button>
+            <button data-FlyTo="portugalete" class="btn-chip">2. Portugalete</button>
+            <button data-FlyTo="getxo" class="btn-chip">3. Getxo</button>
+            <button data-FlyTo="santurtzi" class="btn-chip">4. Santurtzi</button>
+            <button data-FlyTo="basauri" class="btn-chip">5. Basauri</button>
+            <button data-FlyTo="overview" class="btn-chip btn-chip-accent">🌍 Vista General</button>
+          </div>
+        </div>
+
+        <div class="controls-help" id="hud-controls-help">
+          <strong>Controles Jugador:</strong> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Moverse | <kbd>Shift</kbd> Sprint | <kbd>Q</kbd><kbd>E</kbd> o Arrastrar Ratón: Girar Cámara | <kbd>TAB</kbd> Modo Espectador
+        </div>
+      </div>
+
+      <!-- Panel Superior Derecho: Telemetría, Streaming 3D Tiles y Memoria -->
+      <div class="hud-panel" id="panel-telemetry">
+        <div class="hud-header">
+          <h2>TELEMETRÍA & STREAMING 3D TILES</h2>
+        </div>
+        <div class="telemetry-grid">
+          <div class="metric-box">
+            <span class="metric-label">FPS / Frame</span>
+            <span class="metric-value" id="tel-fps">-- FPS</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Perfil GPU (Límite)</span>
+            <span class="metric-value" id="tel-gpu-tier">-- MB</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">VRAM Tilesets</span>
+            <span class="metric-value" id="tel-vram">0.0 MB</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">JS Heap Usado</span>
+            <span class="metric-value" id="tel-heap">N/A</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Tiles (Listos / Pend.)</span>
+            <span class="metric-value" id="tel-tiles">0 / 0</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Max SSE Activo</span>
+            <span class="metric-value" id="tel-sse">16</span>
+          </div>
+        </div>
+        <div class="sse-control">
+          <label for="slider-sse">Ajuste Dinámico SSE (<span id="label-sse-val">16</span>):</label>
+          <input type="range" id="slider-sse" min="4" max="32" step="2" value="16" />
+        </div>
+        <div class="transition-log-container">
+          <div class="section-title">Registro de Transiciones y Memoria:</div>
+          <ul id="tel-transition-log"></ul>
+        </div>
+      </div>
+
+      <!-- Panel Inferior Izquierdo: Progresión de Zonas (Flags Independientes) -->
+      <div class="hud-panel" id="panel-zones">
+        <div class="hud-header">
+          <h2>SISTEMA DE ZONAS Y FLAGS (WEB WORKER)</h2>
+        </div>
+        <p class="panel-subtitle">
+          Desbloquea zonas en caliente (independiente de la carga de 3D Tiles):
+        </p>
+        <div id="zones-list" class="zones-list"></div>
+      </div>
+
+      <!-- Alerta Diegética Central cuando el jugador choca con una barrera lógica -->
+      <div id="diegetic-banner" class="diegetic-banner hidden">
+        <div class="diegetic-icon">⛔</div>
+        <div class="diegetic-content">
+          <div class="diegetic-title" id="diegetic-zone-title">ZONA RESTRINGIDA</div>
+          <div class="diegetic-message" id="diegetic-message">Aún no tienes contactos en esta zona.</div>
+          <div class="diegetic-req" id="diegetic-req">Requisito pendiente: mision_01</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.CESIUM_BASE_URL = './dist/cesiumStatic/';
+    </script>
+  </body>
+</html>

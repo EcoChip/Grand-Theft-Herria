@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bilbao Open-World GIS Prototype — CesiumJS + TypeScript</title>
-    <link rel="stylesheet" href="/cesiumStatic/Widgets/widgets.css" />
-    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="./dist/cesiumStatic/Widgets/widgets.css" />
+    <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
     <div id="cesiumContainer"></div>
@@ -116,6 +116,9 @@
       </div>
     </div>
 
-    <script type="module" src="/src/main.ts"></script>
+    <script>
+      window.CESIUM_BASE_URL = './dist/cesiumStatic/';
+    </script>
+    <script type="module" src="./dist/main.js"></script>
   </body>
 </html>
